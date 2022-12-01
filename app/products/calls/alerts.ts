@@ -57,6 +57,7 @@ export const leaveAndJoinWithAlert = (
     confirmToJoin: boolean,
     newCall: boolean,
     isDMorGM: boolean,
+    onChangeChannel?: (channelId: string) => void 
 ) => {
     if (confirmToJoin) {
         const {formatMessage} = intl;
@@ -91,19 +92,22 @@ export const leaveAndJoinWithAlert = (
                         id: 'mobile.leave_and_join_confirmation',
                         defaultMessage: 'Leave & Join',
                     }),
-                    onPress: () => doJoinCall(serverUrl, channelId, isDMorGM, intl),
+                    onPress: () => doJoinCall(serverUrl, channelId, isDMorGM, intl, onChangeChannel),
                     style: 'cancel',
                 },
             ],
         );
     } else {
-        doJoinCall(serverUrl, channelId, isDMorGM, intl);
+        doJoinCall(serverUrl, channelId, isDMorGM, intl, onChangeChannel);
     }
 };
 
-const doJoinCall = async (serverUrl: string, channelId: string, isDMorGM: boolean, intl: IntlShape) => {
+const doJoinCall = async (serverUrl: string, channelId: string, isDMorGM: boolean, intl: IntlShape, onChangeChannel?: (channelId: string) => void) => {
     const {formatMessage} = intl;
 
+    if(onChangeChannel){
+        onChangeChannel(channelId)
+    }
     let user;
     try {
         const {database} = DatabaseManager.getServerDatabaseAndOperator(serverUrl);

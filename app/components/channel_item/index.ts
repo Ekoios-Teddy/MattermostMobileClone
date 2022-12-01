@@ -90,6 +90,11 @@ const enhance = withObservables(['channel', 'showTeamName'], ({
         distinctUntilChanged(),
     );
 
+    const channelCalling = observeChannelsWithCalls(serverUrl || '').pipe(
+        switchMap((calls) => of$(calls)),
+        distinctUntilChanged(),
+    );
+
     return {
         channel: channel.observe(),
         currentUserId,
@@ -102,6 +107,7 @@ const enhance = withObservables(['channel', 'showTeamName'], ({
         teamDisplayName,
         hasMember,
         hasCall,
+        channelCalling
     };
 });
 

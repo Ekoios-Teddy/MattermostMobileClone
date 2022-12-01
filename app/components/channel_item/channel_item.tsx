@@ -1,23 +1,26 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import React, {useCallback, useMemo} from 'react';
-import {useIntl} from 'react-intl';
-import {StyleSheet, Text, TouchableOpacity, View} from 'react-native';
+import React, { useCallback, useMemo } from "react";
+import { useIntl } from "react-intl";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
-import Badge from '@components/badge';
-import ChannelIcon from '@components/channel_icon';
-import CompassIcon from '@components/compass_icon';
-import {General} from '@constants';
-import {useTheme} from '@context/theme';
-import {useIsTablet} from '@hooks/device';
-import {changeOpacity, makeStyleSheetFromTheme} from '@utils/theme';
-import {typography} from '@utils/typography';
-import {getUserIdFromChannelName} from '@utils/user';
+import Badge from "@components/badge";
+import ChannelIcon from "@components/channel_icon";
+import CompassIcon from "@components/compass_icon";
+import { General } from "@constants";
+import { useTheme } from "@context/theme";
+import { useIsTablet } from "@hooks/device";
+import { changeOpacity, makeStyleSheetFromTheme } from "@utils/theme";
+import { typography } from "@utils/typography";
+import { getUserIdFromChannelName } from "@utils/user";
 
-import CustomStatus from './custom_status';
+import CustomStatus from "./custom_status";
+import _ from "lodash";
 
-import type ChannelModel from '@typings/database/models/servers/channel';
+import type ChannelModel from "@typings/database/models/servers/channel";
+import { leaveAndJoinWithAlert } from "@app/products/calls/alerts";
+import { useServerUrl } from "@app/context/server";
 
 type Props = {
     channel: ChannelModel;
@@ -33,22 +36,23 @@ type Props = {
     hasMember: boolean;
     teamDisplayName?: string;
     testID?: string;
-    hasCall: boolean;
-}
+    hasCall?: boolean;
+    channelCalling: any;
+};
 
 export const getStyleSheet = makeStyleSheetFromTheme((theme: Theme) => ({
     container: {
-        flexDirection: 'row',
+        flexDirection: "row",
         paddingHorizontal: 20,
         minHeight: 40,
-        alignItems: 'center',
+        alignItems: "center",
     },
     infoItem: {
         paddingHorizontal: 0,
     },
     wrapper: {
         flex: 1,
-        flexDirection: 'row',
+        flexDirection: "row",
     },
     icon: {
         fontSize: 24,
@@ -76,7 +80,7 @@ export const getStyleSheet = makeStyleSheetFromTheme((theme: Theme) => ({
     },
     badge: {
         borderColor: theme.sidebarBg,
-        position: 'relative',
+        position: "relative",
         left: 0,
         top: -2,
         alignSelf: undefined,
@@ -103,7 +107,7 @@ export const getStyleSheet = makeStyleSheetFromTheme((theme: Theme) => ({
         color: changeOpacity(theme.centerChannelColor, 0.64),
         paddingLeft: 12,
         marginTop: 4,
-        ...typography('Body', 75),
+        ...typography("Body", 75),
     },
     teamNameMuted: {
         color: changeOpacity(theme.centerChannelColor, 0.32),
@@ -116,21 +120,37 @@ export const getStyleSheet = makeStyleSheetFromTheme((theme: Theme) => ({
         top: 5,
     },
     hasCall: {
-        textAlign: 'right',
+        textAlign: "right",
         paddingRight: 0,
     },
 }));
 
 export const textStyle = StyleSheet.create({
-    bold: typography('Body', 200, 'SemiBold'),
-    regular: typography('Body', 200, 'Regular'),
+    bold: typography("Body", 200, "SemiBold"),
+    regular: typography("Body", 200, "Regular"),
 });
 
 const ChannelListItem = ({
-    channel, currentUserId, hasDraft,
-    isActive, isInfo, isMuted, membersCount, hasMember,
-    isUnread, mentionsCount, onPress, teamDisplayName, testID, hasCall}: Props) => {
-    const {formatMessage} = useIntl();
+    channel,
+    currentUserId,
+    hasDraft,
+    isActive,
+    isInfo,
+    isMuted,
+    membersCount,
+    hasMember,
+    isUnread,
+    mentionsCount,
+    onPress,
+    teamDisplayName,
+    testID,
+    hasCall,
+    channelCalling,
+}: Props) => {
+    const intl = useIntl();
+    const serverUrl = useServerUrl();
+
+    const { formatMessage } = useIntl();
     const theme = useTheme();
     const isTablet = useIsTablet();
     const styles = getStyleSheet(theme);
@@ -141,43 +161,75 @@ const ChannelListItem = ({
     const height = useMemo(() => {
         let h = 40;
         if (isInfo) {
-            h = (teamDisplayName && !isTablet) ? 58 : 44;
+            h = teamDisplayName && !isTablet ? 58 : 44;
         }
         return h;
     }, [teamDisplayName, isInfo, isTablet]);
 
-    const handleOnPress = useCallback(() => {
-        onPress(channel.id);
-    }, [channel.id]);
+    const handleOnPress = () => {
+        if (hasCall) {
+            onPress(channel.id);
+        } else {
+            const leaveChannelName = !_.isEmpty(channelCalling)
+                ? Object.keys(channelCalling)[0]
+                : "";
+            leaveAndJoinWithAlert(
+                intl,
+                serverUrl,
+                channel.id,
+                leaveChannelName,
+                channel.name,
+                !_.isEmpty(channelCalling),
+                !hasCall,
+                true,
+                onPress
+            );
+        }
+    };
 
-    const textStyles = useMemo(() => [
-        isBolded && !isMuted ? textStyle.bold : textStyle.regular,
-        styles.text,
-        isBolded && styles.highlight,
-        isActive && isTablet && !isInfo ? styles.textActive : null,
-        isInfo ? styles.textInfo : null,
-        isMuted && styles.muted,
-        isMuted && isInfo && styles.mutedInfo,
-    ], [isBolded, styles, isMuted, isActive, isInfo, isTablet]);
+    const textStyles = useMemo(
+        () => [
+            isBolded && !isMuted ? textStyle.bold : textStyle.regular,
+            styles.text,
+            isBolded && styles.highlight,
+            isActive && isTablet && !isInfo ? styles.textActive : null,
+            isInfo ? styles.textInfo : null,
+            isMuted && styles.muted,
+            isMuted && isInfo && styles.mutedInfo,
+        ],
+        [isBolded, styles, isMuted, isActive, isInfo, isTablet]
+    );
 
-    const containerStyle = useMemo(() => [
-        styles.container,
-        isActive && isTablet && !isInfo && styles.activeItem,
-        isInfo && styles.infoItem,
-        {minHeight: height},
-    ],
-    [height, isActive, isTablet, isInfo, styles]);
+    const containerStyle = useMemo(
+        () => [
+            styles.container,
+            isActive && isTablet && !isInfo && styles.activeItem,
+            isInfo && styles.infoItem,
+            { minHeight: height },
+        ],
+        [height, isActive, isTablet, isInfo, styles]
+    );
 
     if (!hasMember) {
         return null;
     }
 
-    const teammateId = (channel.type === General.DM_CHANNEL) ? getUserIdFromChannelName(currentUserId, channel.name) : undefined;
-    const isOwnDirectMessage = (channel.type === General.DM_CHANNEL) && currentUserId === teammateId;
+    const teammateId =
+        channel.type === General.DM_CHANNEL
+            ? getUserIdFromChannelName(currentUserId, channel.name)
+            : undefined;
+    const isOwnDirectMessage =
+        channel.type === General.DM_CHANNEL && currentUserId === teammateId;
 
     let displayName = channel.displayName;
     if (isOwnDirectMessage) {
-        displayName = formatMessage({id: 'channel_header.directchannel.you', defaultMessage: '{displayName} (you)'}, {displayName});
+        displayName = formatMessage(
+            {
+                id: "channel_header.directchannel.you",
+                defaultMessage: "{displayName} (you)",
+            },
+            { displayName }
+        );
     }
 
     const channelItemTestId = `${testID}.${channel.name}`;
@@ -185,10 +237,7 @@ const ChannelListItem = ({
     return (
         <TouchableOpacity onPress={handleOnPress}>
             <>
-                <View
-                    style={containerStyle}
-                    testID={channelItemTestId}
-                >
+                <View style={containerStyle} testID={channelItemTestId}>
                     <View style={styles.wrapper}>
                         <ChannelIcon
                             hasDraft={hasDraft}
@@ -205,54 +254,65 @@ const ChannelListItem = ({
                         />
                         <View>
                             <Text
-                                ellipsizeMode='tail'
+                                ellipsizeMode="tail"
                                 numberOfLines={1}
                                 style={textStyles}
                                 testID={`${channelItemTestId}.display_name`}
                             >
                                 {displayName}
                             </Text>
-                            {isInfo && Boolean(teamDisplayName) && !isTablet &&
+                            {isInfo && Boolean(teamDisplayName) && !isTablet && (
+                                <Text
+                                    ellipsizeMode="tail"
+                                    numberOfLines={1}
+                                    style={[
+                                        styles.teamName,
+                                        isMuted && styles.teamNameMuted,
+                                    ]}
+                                    testID={`${channelItemTestId}.team_display_name`}
+                                >
+                                    {teamDisplayName}
+                                </Text>
+                            )}
+                        </View>
+                        {Boolean(teammateId) && (
+                            <CustomStatus
+                                isInfo={isInfo}
+                                testID={channelItemTestId}
+                                userId={teammateId!}
+                            />
+                        )}
+                        {isInfo && Boolean(teamDisplayName) && isTablet && (
                             <Text
-                                ellipsizeMode='tail'
+                                ellipsizeMode="tail"
                                 numberOfLines={1}
-                                style={[styles.teamName, isMuted && styles.teamNameMuted]}
+                                style={[
+                                    styles.teamName,
+                                    styles.teamNameTablet,
+                                    isMuted && styles.teamNameMuted,
+                                ]}
                                 testID={`${channelItemTestId}.team_display_name`}
                             >
                                 {teamDisplayName}
                             </Text>
-                            }
-                        </View>
-                        {Boolean(teammateId) &&
-                        <CustomStatus
-                            isInfo={isInfo}
-                            testID={channelItemTestId}
-                            userId={teammateId!}
-                        />
-                        }
-                        {isInfo && Boolean(teamDisplayName) && isTablet &&
-                        <Text
-                            ellipsizeMode='tail'
-                            numberOfLines={1}
-                            style={[styles.teamName, styles.teamNameTablet, isMuted && styles.teamNameMuted]}
-                            testID={`${channelItemTestId}.team_display_name`}
-                        >
-                            {teamDisplayName}
-                        </Text>
-                        }
+                        )}
                     </View>
                     <Badge
                         visible={mentionsCount > 0}
                         value={mentionsCount}
-                        style={[styles.badge, isMuted && styles.mutedBadge, isInfo && styles.infoBadge]}
+                        style={[
+                            styles.badge,
+                            isMuted && styles.mutedBadge,
+                            isInfo && styles.infoBadge,
+                        ]}
                     />
-                    {hasCall &&
+                    {hasCall && (
                         <CompassIcon
-                            name='phone-in-talk'
+                            name="phone-in-talk"
                             size={16}
                             style={[...textStyles, styles.hasCall]}
                         />
-                    }
+                    )}
                 </View>
             </>
         </TouchableOpacity>
